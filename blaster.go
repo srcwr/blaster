@@ -127,6 +127,7 @@ func main() {
 	flag_norules := flag.Bool("norules", false, "Don't query server rules")
 	flag_mapfilters := flag.String("mapfilters", "", "Comma-delimited list of strings to search for in map names")
 	flag_tags := flag.String("tags", "", "Filter servers that have all these in their sv_tags")
+	flag_ipblockfile := flag.String("ipblockfile", "", "Input file with IPs to ignore")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: -game or -appids\n")
 		flag.PrintDefaults()
@@ -135,6 +136,7 @@ func main() {
 
 	appids := []valve.AppId{}
 	mapfilters := []string{}
+	blockedips := make(map[string]bool)
 
 	switch *flag_format {
 	case "list", "map", "lines":
@@ -195,6 +197,20 @@ func main() {
 		}
 	}
 
+	if *flag_ipblockfile != "" {
+		content, err := os.ReadFile(*flag_ipblockfile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to read -ipblockfile %s", *flag_ipblockfile)
+			os.Exit(1)
+		}
+		lines := strings.Split(string(content), "\n")
+		for _, line := range lines {
+			if line != "" && !strings.HasPrefix(line, "#") {
+				blockedips[line] = true
+			}
+		}
+	}
+
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	// Create a connection to the master server.
@@ -215,6 +231,10 @@ func main() {
 	// concurrently.
 	bp := batch.NewBatchProcessor(func(item interface{}) {
 		addr := item.(*net.TCPAddr)
+		if _, ok := blockedips[addr.IP.String()]; ok {
+			return
+		}
+
 		query, err := valve.NewServerQuerier(addr.String(), *flag_timeout)
 		if err != nil {
 			addError(addr.String(), err)
