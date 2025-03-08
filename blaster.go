@@ -125,6 +125,7 @@ func main() {
 	flag_format := flag.String("format", "list", "JSON format (list, map, or lines)")
 	flag_outfile := flag.String("outfile", "", "Output to a file")
 	flag_norules := flag.Bool("norules", false, "Don't query server rules")
+	flag_mapfilters := flag.String("mapfilters", "", "Comma-delimited list of strings to search for in map names")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: -game or -appids\n")
 		flag.PrintDefaults()
@@ -132,6 +133,7 @@ func main() {
 	flag.Parse()
 
 	appids := []valve.AppId{}
+	mapfilters := []string{}
 
 	switch *flag_format {
 	case "list", "map", "lines":
@@ -186,6 +188,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	if *flag_mapfilters != "" {
+		for _, part := range strings.Split(*flag_mapfilters, ",") {
+			mapfilters = append(mapfilters, strings.ToLower(part))
+		}
+	}
+
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	// Create a connection to the master server.
@@ -213,6 +221,20 @@ func main() {
 		if err != nil {
 			addError(addr.String(), err)
 			return
+		}
+
+		if len(mapfilters) != 0 {
+			tmp_mapname := strings.ToLower(info.MapName)
+			matched := false
+			for _, v := range mapfilters {
+				if strings.Contains(tmp_mapname, v) {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				return
+			}
 		}
 
 		out := &ServerObject{
