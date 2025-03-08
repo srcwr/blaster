@@ -53,6 +53,10 @@ func (this *MasterServerQuerier) FilterAppIds(appIds []AppId) {
 	}
 }
 
+func (this *MasterServerQuerier) FilterTags(tags string) {
+	this.filters = append(this.filters, fmt.Sprintf("\\gametype\\%s", tags))
+}
+
 func (this *MasterServerQuerier) ClearFilters() {
 	this.filters = []string{}
 }

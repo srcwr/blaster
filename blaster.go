@@ -126,6 +126,7 @@ func main() {
 	flag_outfile := flag.String("outfile", "", "Output to a file")
 	flag_norules := flag.Bool("norules", false, "Don't query server rules")
 	flag_mapfilters := flag.String("mapfilters", "", "Comma-delimited list of strings to search for in map names")
+	flag_tags := flag.String("tags", "", "Filter servers that have all these in their sv_tags")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: -game or -appids\n")
 		flag.PrintDefaults()
@@ -205,6 +206,10 @@ func main() {
 
 	// Set up the filter list.
 	master.FilterAppIds(appids)
+
+	if *flag_tags != "" {
+		master.FilterTags(*flag_tags)
+	}
 
 	// Initialize our batch processor, which will receive servers and query them
 	// concurrently.
