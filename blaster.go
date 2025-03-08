@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	batch "github.com/alliedmodders/blaster/batch"
@@ -115,6 +116,13 @@ func addError(hostAndPort string, err error) {
 	})
 }
 
+// https://stackoverflow.com/a/74746743
+func UpdateCounter(counters *sync.Map, key string) int32 {
+	val, _ := counters.LoadOrStore(key, new(int32))
+	ptr := val.(*int32)
+	return atomic.AddInt32(ptr, 1)
+}
+
 func main() {
 	flag_game := flag.String("game", "", "Game (hl1, hl2)")
 	flag_appid := flag.Int("appid", 0, "Query a single AppID")
@@ -136,7 +144,8 @@ func main() {
 
 	appids := []valve.AppId{}
 	mapfilters := []string{}
-	blockedips := make(map[string]bool)
+	var blockedips sync.Map
+	var ipcounts sync.Map
 
 	switch *flag_format {
 	case "list", "map", "lines":
@@ -206,7 +215,7 @@ func main() {
 		lines := strings.Split(string(content), "\n")
 		for _, line := range lines {
 			if line != "" && !strings.HasPrefix(line, "#") {
-				blockedips[line] = true
+				blockedips.Store(line, true)
 			}
 		}
 	}
@@ -231,7 +240,12 @@ func main() {
 	// concurrently.
 	bp := batch.NewBatchProcessor(func(item interface{}) {
 		addr := item.(*net.TCPAddr)
-		if _, ok := blockedips[addr.IP.String()]; ok {
+		if _, ok := blockedips.Load(addr.IP.String()); ok {
+			return
+		}
+
+		if UpdateCounter(&ipcounts, addr.IP.String()) > 10 {
+			blockedips.Store(addr.IP.String(), true)
 			return
 		}
 
